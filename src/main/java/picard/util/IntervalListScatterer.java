@@ -2,6 +2,7 @@ package picard.util;
 
 import htsjdk.samtools.util.Interval;
 import htsjdk.samtools.util.IntervalList;
+import htsjdk.samtools.util.Log;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -23,7 +24,7 @@ public class IntervalListScatterer {
          * A scatter approach that differs from {@link Mode#INTERVAL_SUBDIVISION} in a few ways:
          * <ol>
          * <li>No interval will be subdivided, and consequently, the requested {@link IntervalListTools#SCATTER_COUNT} is
-         * an upper bound of scatter count, not a guarante of the number of {@link IntervalList}s that will be produced
+         * an upper bound of scatter count, not a guarantee of the number of {@link IntervalList}s that will be produced
          * (e.g., if scatterCount = 10 but there is only one interval in the input, only 1 interval list will be emitted).</li>
          * <li>When an interval would otherwise be split, it is instead deferred to the next scatter list.</li>
          * <li>The "target width" of each scatter list may be wider than what is computed for {@link Mode#INTERVAL_SUBDIVISION}.
@@ -40,10 +41,19 @@ public class IntervalListScatterer {
          * computed from the total number of unique bases and the bases we have consumed.  This means that the interval list with the most
          * number of unique bases is at most the ideal split length larger than the smallest interval list (unique number of bases).
          */
-        BALANCING_WITHOUT_INTERVAL_SUBDIVISION_WITH_OVERFLOW
+        BALANCING_WITHOUT_INTERVAL_SUBDIVISION_WITH_OVERFLOW,
+
+        /**
+         * A scatter approach that aspires to create interval lists with the same _number of intervals_ (rather than the same number
+         * of bases in each interval-list) In addition, the original intervals, will not be merged even if they are abbuting or overlapping.
+         * The input intervals will be sorted and the output lists will be in reference order.
+         */
+        BALANCING_INTERVALS,
+
     }
 
     private final Mode mode;
+    private static final Log LOG = Log.getInstance(IntervalListScatterer.class);
 
     public IntervalListScatterer(final Mode mode) {this.mode = mode;}
 
@@ -58,8 +68,23 @@ public class IntervalListScatterer {
 
                 // There is no purpose to splitting more granularly than the widest interval, so do not.
                 return Math.max(widestIntervalLength, splitWidth);
+            case BALANCING_INTERVALS:
+                return -1;
             default:
-                throw new IllegalStateException();
+                throw new IllegalStateException("unknown Scattering mode " + mode);
+        }
+    }
+    private int deduceIdealSplitNum(final IntervalList mergedList, final int scatterCount) {
+        final int splitWidth = Math.max((int) Math.ceil(mergedList.size() / ((double) scatterCount)), 1);
+        switch (mode) {
+            case INTERVAL_SUBDIVISION:
+            case BALANCING_WITHOUT_INTERVAL_SUBDIVISION:
+            case BALANCING_WITHOUT_INTERVAL_SUBDIVISION_WITH_OVERFLOW:
+                return -1;
+            case BALANCING_INTERVALS:
+                return splitWidth;
+            default:
+                throw new IllegalStateException("unknown Scattering mode " + mode);
         }
     }
 
@@ -72,6 +97,8 @@ public class IntervalListScatterer {
         switch (mode) {
             case BALANCING_WITHOUT_INTERVAL_SUBDIVISION_WITH_OVERFLOW:
                 return (projectedSize <= idealSplitLength || idealSplitLength < projectedSizeOfRemainingDivisions);
+            case BALANCING_INTERVALS:
+                throw new IllegalStateException("unknown Scattering mode " + mode);
             default:
                 return (projectedSize <= idealSplitLength);
         }
@@ -83,7 +110,10 @@ public class IntervalListScatterer {
 
         final IntervalList uniquedList = isUniqued ? sourceIntervalList : sourceIntervalList.uniqued();
         final long idealSplitLength = deduceIdealSplitLength(uniquedList, scatterCount);
-        System.err.println("idealSplitLength=" + idealSplitLength);
+        final long idealSplitNum = deduceIdealSplitNum(sourceIntervalList, scatterCount);
+
+        if (idealSplitLength != -1) LOG.info("idealSplitLength=" + idealSplitLength);
+        if (idealSplitNum != -1)    LOG.info("idealSplitNum=" + idealSplitLength);
 
         final List<IntervalList> accumulatedIntervalLists = new ArrayList<>();
 
@@ -142,6 +172,14 @@ public class IntervalListScatterer {
                             runningIntervalList = new IntervalList(uniquedList.getHeader());
                         }
                         break;
+                    case BALANCING_INTERVALS:
+                        if (runningIntervalList.getIntervals().isEmpty()) {
+                            runningIntervalList.add(interval);
+                        }
+                        break;
+
+                    default:
+                        throw new IllegalStateException("unknown Scattering mode " + mode);
                 }
             }
 
