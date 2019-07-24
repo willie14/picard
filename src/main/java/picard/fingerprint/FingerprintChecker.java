@@ -24,11 +24,25 @@
 
 package picard.fingerprint;
 
-import htsjdk.samtools.*;
-import htsjdk.samtools.filter.NotPrimaryAlignmentFilter;
+import htsjdk.samtools.Cigar;
+import htsjdk.samtools.CigarElement;
+import htsjdk.samtools.SAMFileHeader;
+import htsjdk.samtools.SAMReadGroupRecord;
+import htsjdk.samtools.SAMRecord;
+import htsjdk.samtools.SAMTag;
+import htsjdk.samtools.SamReader;
+import htsjdk.samtools.SamReaderFactory;
+import htsjdk.samtools.ValidationStringency;
+import htsjdk.samtools.filter.DuplicateReadFilter;
 import htsjdk.samtools.filter.SamRecordFilter;
 import htsjdk.samtools.filter.SecondaryAlignmentFilter;
-import htsjdk.samtools.util.*;
+import htsjdk.samtools.filter.SecondaryOrSupplementaryFilter;
+import htsjdk.samtools.util.Interval;
+import htsjdk.samtools.util.IntervalList;
+import htsjdk.samtools.util.Log;
+import htsjdk.samtools.util.SamLocusIterator;
+import htsjdk.samtools.util.SequenceUtil;
+import htsjdk.samtools.util.StringUtil;
 import htsjdk.variant.utils.SAMSequenceDictionaryExtractor;
 import htsjdk.variant.variantcontext.Allele;
 import htsjdk.variant.variantcontext.Genotype;
@@ -42,8 +56,25 @@ import picard.util.ThreadPoolExecutorWithExceptions;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
-import java.util.*;
-import java.util.concurrent.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.NoSuchElementException;
+import java.util.Random;
+import java.util.Set;
+import java.util.SortedSet;
+import java.util.TreeSet;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorCompletionService;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static htsjdk.samtools.SamReaderFactory.Option.CACHE_FILE_BASED_INDEXES;
@@ -401,6 +432,57 @@ public class FingerprintChecker {
         return fpIdMap;
     }
 
+    // move this to htsjdk ASAP
+    private static class NoisyReadFilter implements SamRecordFilter {
+        final double noiseRatio;
+
+        private NoisyReadFilter(final double noiseRatio) {
+            this.noiseRatio = noiseRatio;
+        }
+
+        /**
+         * Determines whether a SAMRecord matches this filter
+         *
+         * @param record the SAMRecord to evaluate
+         * @return true if the SAMRecord matches the filter, otherwise false
+         */
+        @Override
+        public boolean filterOut(final SAMRecord record) {
+            final Integer NM = record.getIntegerAttribute(SAMTag.NM.name());
+            if (NM == null) {
+                //cannot decide without NM tag;
+                return false;
+            }
+
+            return NM / (double) getMatchingAlignmentLength(record.getCigar()) >= noiseRatio;
+
+        }
+
+        int getMatchingAlignmentLength(Cigar cig) {
+            int length = 0;
+            for (final CigarElement element : cig.getCigarElements()) {
+                if (element.getOperator().consumesReadBases() && element.getOperator().consumesReferenceBases()) {
+                    length += element.getLength();
+                }
+            }
+            return length;
+        }
+
+        /**
+         * Determines whether a pair of SAMRecord matches this filter
+         *
+         * @param first  the first SAMRecord to evaluate
+         * @param second the second SAMRecord to evaluate
+         * @return true if the SAMRecords matches the filter, otherwise false
+         */
+        @Override
+        public boolean filterOut(final SAMRecord first, final SAMRecord second) {
+            // filter out the pair if either first and second reads are noisy
+            return (filterOut(first) || filterOut(second));
+        }
+    }
+
+
     /**
      * Generates a Fingerprint per read group in the supplied SAM file using the loci provided in
      * the interval list.
@@ -415,6 +497,12 @@ public class FingerprintChecker {
                 in.getFileHeader().getSequenceDictionary());
 
         final SamLocusIterator iterator = new SamLocusIterator(in, loci, in.hasIndex());
+
+        iterator.setSamFilters(Arrays.asList(
+                new SecondaryOrSupplementaryFilter(),
+                new DuplicateReadFilter(),
+                new NoisyReadFilter(0.1)));
+
         iterator.setEmitUncoveredLoci(true);
         iterator.setMappingQualityScoreCutoff(this.minimumMappingQuality);
         iterator.setQualityScoreCutoff(this.minimumBaseQuality);
