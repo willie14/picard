@@ -76,8 +76,9 @@ public class RenameJukeBoxReads extends SinglePassSamProgram {
         } catch (IOException e) {
             throw new PicardException("Trouble reading from binary file: " + BEADS_XY, e);
         }
-        final String newReadname = String.format("JB:%s:%d:%d:%d",
-                RUN_BARCODE, currentTileRow.TileID, readCoordinates.xCoordinate, readCoordinates.yCoordinate);
+        final String newReadname = String.format("%s:%s:%d:%d:%d",
+                RUN_BARCODE, indexString, currentTileRow.TileID,
+                readCoordinates.xCoordinate, readCoordinates.yCoordinate);
 
         rec.setReadName(newReadname);
         outputWriter.addAlignment(rec);
