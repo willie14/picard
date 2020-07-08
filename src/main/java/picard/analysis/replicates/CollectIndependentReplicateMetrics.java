@@ -133,7 +133,7 @@ public class CollectIndependentReplicateMetrics extends CommandLineProgram {
 
     private static final int DOUBLETON_SIZE = 2, TRIPLETON_SIZE = 3;
 
-    @Argument(shortName = StandardOptionDefinitions.INPUT_SHORT_NAME, doc = "Input (indexed) BAM file.")
+    @Argument(shortName = StandardOptionDefinitions.INPUT_SHORT_NAME, doc = "Input (indexed) BAM/CRAM file.")
     public File INPUT;
 
     @Argument(shortName = StandardOptionDefinitions.OUTPUT_SHORT_NAME, doc = "Write metrics to this file")
@@ -190,7 +190,7 @@ public class CollectIndependentReplicateMetrics extends CommandLineProgram {
         IOUtil.assertFileIsReadable(INPUT);
 
         // get an iterator to reads that overlap the heterozygous sites
-        final SamReader in = SamReaderFactory.makeDefault().open(INPUT);
+        final SamReader in = SamReaderFactory.makeDefault().referenceSequence(REFERENCE_SEQUENCE).open(INPUT);
 
         if (!in.hasIndex()) {
             throw new PicardException("INPUT file must have an index.");

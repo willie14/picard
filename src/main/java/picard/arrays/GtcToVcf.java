@@ -24,16 +24,6 @@
 
 package picard.arrays;
 
-import org.broadinstitute.barclay.help.DocumentedFeature;
-import picard.arrays.illumina.ArraysControlInfo;
-import picard.arrays.illumina.Build37ExtendedIlluminaManifest;
-import picard.arrays.illumina.Build37ExtendedIlluminaManifestRecord;
-import picard.arrays.illumina.IlluminaManifestRecord;
-import picard.arrays.illumina.InfiniumEGTFile;
-import picard.arrays.illumina.InfiniumGTCFile;
-import picard.arrays.illumina.InfiniumGTCRecord;
-import picard.arrays.illumina.InfiniumVcfFields;
-import picard.pedigree.Sex;
 import htsjdk.samtools.SAMSequenceDictionary;
 import htsjdk.samtools.reference.ReferenceSequenceFile;
 import htsjdk.samtools.reference.ReferenceSequenceFileFactory;
@@ -64,9 +54,19 @@ import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.lang.StringUtils;
 import org.broadinstitute.barclay.argparser.Argument;
 import org.broadinstitute.barclay.argparser.CommandLineProgramProperties;
+import org.broadinstitute.barclay.help.DocumentedFeature;
 import picard.PicardException;
+import picard.arrays.illumina.ArraysControlInfo;
+import picard.arrays.illumina.Build37ExtendedIlluminaManifest;
+import picard.arrays.illumina.Build37ExtendedIlluminaManifestRecord;
+import picard.arrays.illumina.IlluminaManifestRecord;
+import picard.arrays.illumina.InfiniumEGTFile;
+import picard.arrays.illumina.InfiniumGTCFile;
+import picard.arrays.illumina.InfiniumGTCRecord;
+import picard.arrays.illumina.InfiniumVcfFields;
 import picard.cmdline.CommandLineProgram;
 import picard.cmdline.StandardOptionDefinitions;
+import picard.pedigree.Sex;
 
 import java.io.File;
 import java.io.IOException;

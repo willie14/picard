@@ -166,7 +166,7 @@ public class MultiLevelCollectorTest {
 
     @Test(dataProvider = "variedAccumulationLevels")
     public void multilevelCollectorTest(final Set<MetricAccumulationLevel> accumulationLevels) {
-        final SamReader in = SamReaderFactory.makeDefault().open(TESTFILE);
+        final SamReader in = SamReaderFactory.makeDefault().referenceSequence(REFERENCE_SEQUENCE).open(TESTFILE);
         final RecordCountMultiLevelCollector collector = new RecordCountMultiLevelCollector(accumulationLevels, in.getFileHeader().getReadGroups());
 
         for (final SAMRecord rec : in) {

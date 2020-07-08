@@ -90,7 +90,7 @@ public class IlluminaBasecallsToSamTest extends CommandLineProgramTest {
                 "LIBRARY_NAME=Hello, World"
         }), 0);
         final SamFileValidator validator = new SamFileValidator(new PrintWriter(System.out), 100);
-        validator.validateSamFileSummary(SamReaderFactory.makeDefault().open(outputBam), null);
+        validator.validateSamFileSummary(SamReaderFactory.makeDefault().referenceSequence(REFERENCE_SEQUENCE).open(outputBam), null);
         IOUtil.assertFilesEqual(outputBam, new File(TEST_DATA_DIR, "nonBarcodedDescriptionNonBI.sam"));
     }
 
@@ -137,7 +137,7 @@ public class IlluminaBasecallsToSamTest extends CommandLineProgramTest {
         Assert.assertEquals(runPicardCommandLine(args), expectedReturn);
         if (expectedSam != null) {
             final SamFileValidator validator = new SamFileValidator(new PrintWriter(System.out), 100);
-            validator.validateSamFileSummary(SamReaderFactory.makeDefault().open(outputBam), null);
+            validator.validateSamFileSummary(SamReaderFactory.makeDefault().referenceSequence(REFERENCE_SEQUENCE).open(outputBam), null);
             IOUtil.assertFilesEqual(outputBam, new File(TEST_DATA_DIR, expectedSam));
         }
     }
