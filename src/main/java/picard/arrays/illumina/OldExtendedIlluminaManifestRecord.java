@@ -20,7 +20,7 @@ import java.util.regex.Pattern;
 /**
  * A class to represent a record (line) from a Extended Illumina Manifest block
  */
-public class ExtendedIlluminaManifestRecord extends IlluminaManifestRecord {
+public class OldExtendedIlluminaManifestRecord extends IlluminaManifestRecord {
     protected enum Flag {
         ILLUMINA_FLAGGED,   // Illumina flagged
         LIFTOVER_FAILED,
@@ -53,7 +53,7 @@ public class ExtendedIlluminaManifestRecord extends IlluminaManifestRecord {
 
     private Strand calculatedStrand;
 
-    private final Log log = Log.getInstance(ExtendedIlluminaManifestRecord.class);
+    private final Log log = Log.getInstance(OldExtendedIlluminaManifestRecord.class);
 
     // These are the IUPAC nucleotide codes as described here: https://www.bioinformatics.org/sms/iupac.html
     private static final String IUPAC_NUCLEOTIDE_CODES = "ACGTRYSWKMBDHVNacgtryswkmbdhvn";
@@ -78,7 +78,7 @@ public class ExtendedIlluminaManifestRecord extends IlluminaManifestRecord {
      * This constructor is used to read records from an already created ExtendedIlluminaManifestRecord file.
      * It does not work to set the Extended-specific fields
      */
-    ExtendedIlluminaManifestRecord(final Map<String, Integer> columnNameToIndex, final String[] line, final int index) {
+    OldExtendedIlluminaManifestRecord(final Map<String, Integer> columnNameToIndex, final String[] line, final int index) {
         super(columnNameToIndex, line, index);
 
         final int end = line.length;
@@ -109,15 +109,33 @@ public class ExtendedIlluminaManifestRecord extends IlluminaManifestRecord {
         }
     }
 
+    OldExtendedIlluminaManifestRecord(final IlluminaManifestRecord record,
+                                      final Flag flag,
+                                      final String b37Chr,
+                                      final int b37Pos,
+                                      final String snpRefAllele,
+                                      final String snpAlleleA,
+                                      final String snpAlleleB,
+                                      final String rsId) {
+        super(record);
+        this.flag = flag;
+        this.b37Chr = b37Chr;
+        this.b37Pos = b37Pos;
+        this.snpRefAllele = snpRefAllele;
+        this.snpAlleleA = snpAlleleA;
+        this.snpAlleleB = snpAlleleB;
+        this.rsId = rsId;
+    }
+
     /**
      * This constructor is used to take a record from an Illumina Manifest and sets the Extended-specific fields
      * in preparation for writing out the Build37ExtendedIlluminaManifestRecord to file (or otherwise using it)
      */
-    ExtendedIlluminaManifestRecord(final IlluminaManifestRecord record,
-                                   final Map<String, ReferenceSequenceFile> referenceFilesMap,
-                                   final Map<String, File> chainFilesMap,
-                                   final boolean dupe,
-                                   final String passedRsId) {
+    OldExtendedIlluminaManifestRecord(final IlluminaManifestRecord record,
+                                      final Map<String, ReferenceSequenceFile> referenceFilesMap,
+                                      final Map<String, File> chainFilesMap,
+                                      final boolean dupe,
+                                      final String passedRsId) {
         super(record);
 
         validate(record, dupe);

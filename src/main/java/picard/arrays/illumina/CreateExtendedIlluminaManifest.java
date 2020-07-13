@@ -1,6 +1,5 @@
 package picard.arrays.illumina;
 
-import com.google.common.io.Files;
 import htsjdk.samtools.SAMFileHeader;
 import htsjdk.samtools.SAMSequenceDictionary;
 import htsjdk.samtools.reference.ReferenceSequenceFile;
@@ -53,11 +52,19 @@ public class CreateExtendedIlluminaManifest extends CommandLineProgram {
     @Argument(shortName = "BPM", doc = "The Illumina Bead Pool Manifest (.bpm) file")
     public File BEAD_POOL_MANIFEST_FILE;
 
-    // TODO - change this to explicitly name the outputs
-    @Argument(shortName = "O", doc = "The base name of the extend manifest file to write.")
-    public File OUTPUT_BASE_FILE;
+    @Argument(shortName = StandardOptionDefinitions.OUTPUT_SHORT_NAME, doc = "The name of the extended manifest to be written.")
+    public File OUTPUT;
 
-    @Argument(shortName = "CF", doc = "The Standard (Hapmap-trained) cluster file (.egt) from Illumina. (Used to determine which duplicates have best GenTrain scores)")
+    @Argument(shortName = "BAF", doc = "The name of the the 'bad assays file'. This is a subset version of the extended manifest, " +
+            "containing only unmappable assays")
+    public File BAD_ASSAYS_FILE;
+
+    @Argument(shortName = "RF", doc = "The name of the the report file")
+    public File REPORT_FILE;
+
+    @Argument(shortName = "CF", doc = "The Standard (Hapmap-trained) cluster file (.egt) from Illumina. " +
+            "If there are duplicate assays at a site, this is used to decide which is the 'best' (non-filtered in generated VCFs) " +
+            "by choosing the assay with the best GenTrain scores)")
     public File CLUSTER_FILE;
 
     @Argument(shortName = "DBSNP", doc = "Reference dbSNP file in VCF format.", optional = true)
@@ -80,14 +87,7 @@ public class CreateExtendedIlluminaManifest extends CommandLineProgram {
 
     private static final Log log = Log.getInstance(CreateExtendedIlluminaManifest.class);
 
-    public static final String VERSION = "1.5";
-    public static final String EXTENDED_MANIFEST_EXT = ".extended.csv";
-    public static final String BAD_ASSAYS_FILE_EXT = ".bad_assays.csv";
-    public static final String REPORT_FILE_EXT = ".report.txt";
-
-    private File extendedIlluminaManifestFile;
-    private File badAssaysFile;
-    private File reportFile;
+    public static final String VERSION = "1.6";
 
     @Override
     protected int doWork() {
@@ -110,34 +110,28 @@ public class CreateExtendedIlluminaManifest extends CommandLineProgram {
             // Open the Original Illumina Manifest
             final IlluminaManifest manifestFile = new IlluminaManifest(INPUT);
 
-            extendedIlluminaManifestFile = new File(OUTPUT_BASE_FILE.getAbsolutePath() + EXTENDED_MANIFEST_EXT);
-            badAssaysFile = new File(OUTPUT_BASE_FILE.getAbsolutePath() + BAD_ASSAYS_FILE_EXT);
-            reportFile = new File(OUTPUT_BASE_FILE.getAbsolutePath() + REPORT_FILE_EXT);
-
-            if (extendedIlluminaManifestFile.exists() || badAssaysFile.exists() || (reportFile.exists())) {
-                log.info("Either '" + extendedIlluminaManifestFile.getAbsolutePath() + "' or '" +
-                        badAssaysFile.getAbsolutePath() + "' or '" + reportFile.getAbsolutePath() + "' exists - we are not overwriting them.");
-                System.exit(0);
-            }
-            IOUtil.assertFileIsWritable(extendedIlluminaManifestFile);
-            IOUtil.assertFileIsWritable(badAssaysFile);
-            IOUtil.assertFileIsWritable(reportFile);
-
-            //write to a temp file and move to avoid overwriting
-            final File tempDir = TMP_DIR.isEmpty() ? null : TMP_DIR.get(0); // use specified temp dir if given
-            final File tempExtendedManifestFile = File.createTempFile(extendedIlluminaManifestFile.getName(), ".exttemp", tempDir);
-            tempExtendedManifestFile.deleteOnExit();
-            final File tempBadAssaysFile = File.createTempFile(badAssaysFile.getName(), ".badtemp");
-            tempBadAssaysFile.deleteOnExit();
-            final File tempReportFile = File.createTempFile(reportFile.getName(), REPORT_FILE_EXT);
-            tempReportFile.deleteOnExit();
+            // TODO - Warn - don't allow overwrite
+            IOUtil.assertFileIsWritable(OUTPUT);
+            IOUtil.assertFileIsWritable(BAD_ASSAYS_FILE);
+            IOUtil.assertFileIsWritable(REPORT_FILE);
 
             Map<String, List<IlluminaManifestRecord>> coordinateMap = new HashMap<>();
 
             IntervalList manifestSnpIntervals = new IntervalList(sequenceDictionary);
             IntervalList manifestIndelIntervals = new IntervalList(sequenceDictionary);
 
+            log.info("Loading the bpm file");
+            final IlluminaBPMFile illuminaBPMFile;
+            try {
+                illuminaBPMFile = new IlluminaBPMFile(BEAD_POOL_MANIFEST_FILE);
+            } catch (IOException e) {
+                throw new PicardException("Error reading bpm file '" + BEAD_POOL_MANIFEST_FILE.getAbsolutePath() + "'", e);
+            }
+            IlluminaBPMLocusEntry[] illuminaBPMLocusEntries = illuminaBPMFile.getLocusEntries();
+
             // Load the cluster file to get the GenTrain scores
+            // load the egt first, and create a map of ilmnid to gentrain score.  Save that and use it for deduplicating.
+            log.info("Loading the egt file");
             final InfiniumEGTFile infiniumEGTFile;
             try {
                 infiniumEGTFile = new InfiniumEGTFile(CLUSTER_FILE);
@@ -145,13 +139,7 @@ public class CreateExtendedIlluminaManifest extends CommandLineProgram {
                 throw new PicardException("Error reading cluster file '" + CLUSTER_FILE.getAbsolutePath() + "'", e);
             }
 
-            final IlluminaBPMFile illuminaBPMFile;
-            try {
-                illuminaBPMFile = new IlluminaBPMFile(INPUT);
-            } catch (IOException e) {
-                throw new PicardException("Error reading bpm file '" + INPUT.getAbsolutePath() + "'", e);
-            }
-            IlluminaBPMLocusEntry[] illuminaBPMLocusEntries = illuminaBPMFile.getLocusEntries();
+            Build37ExtendedIlluminaManifestRecordCreator creator = new Build37ExtendedIlluminaManifestRecordCreator(referenceSequenceMap, chainFilesMap);
 
             // first iteration through the manifest to find all dupes
             log.info("Phase 1.  First Pass through the manifest.  Build coordinate map for dupe flagging and make SNP and indel-specific interval lists for parsing dbSnp");
@@ -171,8 +159,11 @@ public class CreateExtendedIlluminaManifest extends CommandLineProgram {
                 }
                 IlluminaBPMLocusEntry locusEntry = illuminaBPMLocusEntries[locusIndex++];
                 final IlluminaManifestRecord record = firstPassIterator.next();
+
+                creator.validateLocusEntryAndCreateExtendedRecord(locusEntry, record);
+
                 // Create an ExtendedIlluminaManifestRecord here so that we can get the (potentially lifted over) coordinates
-                final ExtendedIlluminaManifestRecord rec = new ExtendedIlluminaManifestRecord(record,
+                final Build37ExtendedIlluminaManifestRecord rec = new Build37ExtendedIlluminaManifestRecord(record,
                         referenceSequenceMap, chainFilesMap, false, null);
                 manifestStatistics.updateStatistics(rec);
 
@@ -236,13 +227,13 @@ public class CreateExtendedIlluminaManifest extends CommandLineProgram {
             final IlluminaManifest secondPassManifestFile = new IlluminaManifest(INPUT);
             final Iterator<IlluminaManifestRecord> secondPassIterator = secondPassManifestFile.iterator();
 
-            final BufferedWriter out = new BufferedWriter(new FileWriter(tempExtendedManifestFile, true));
+            final BufferedWriter out = new BufferedWriter(new FileWriter(OUTPUT, true));
             writeExtendedIlluminaManifestHeaders(manifestFile, out);
 
             //second iteration to write all records after dupe evaluation
             log.info("Phase 3.  Generate the Extended Illumina Manifest");
             logger = new ProgressLogger(log, 10000);
-            List<ExtendedIlluminaManifestRecord> badRecords = new ArrayList<>();
+            List<Build37ExtendedIlluminaManifestRecord> badRecords = new ArrayList<>();
             while (secondPassIterator.hasNext()) {
                 logger.record("0", 0);
                 final IlluminaManifestRecord record = secondPassIterator.next();
@@ -253,7 +244,7 @@ public class CreateExtendedIlluminaManifest extends CommandLineProgram {
                 } else {
                     rsId = indelLocusToRsId.get(locus);
                 }
-                final ExtendedIlluminaManifestRecord rec = new ExtendedIlluminaManifestRecord(record,
+                final Build37ExtendedIlluminaManifestRecord rec = new Build37ExtendedIlluminaManifestRecord(record,
                         referenceSequenceMap, chainFilesMap, dupeIndices.contains(record.getIndex()), rsId);
                 if (rec.isBad()) {
                     badRecords.add(rec);
@@ -265,13 +256,8 @@ public class CreateExtendedIlluminaManifest extends CommandLineProgram {
             out.flush();
             out.close();
 
-            writeBadAssaysFile(tempBadAssaysFile, badRecords);
-
-            manifestStatistics.logStatistics(tempReportFile);
-
-            installFileIfNotFound(tempReportFile, reportFile);
-            installFileIfNotFound(tempBadAssaysFile, badAssaysFile);
-            installFileIfNotFound(tempExtendedManifestFile, extendedIlluminaManifestFile);
+            writeBadAssaysFile(BAD_ASSAYS_FILE, badRecords);
+            manifestStatistics.logStatistics(REPORT_FILE);
         } catch (IOException e) {
             throw new PicardException(e.getMessage(), e);
         }
@@ -279,7 +265,7 @@ public class CreateExtendedIlluminaManifest extends CommandLineProgram {
         return 0;
     }
 
-    private void writeBadAssaysFile(File badAssaysFile, List<ExtendedIlluminaManifestRecord> badRecords) throws IOException {
+    private void writeBadAssaysFile(File badAssaysFile, List<Build37ExtendedIlluminaManifestRecord> badRecords) throws IOException {
         BufferedWriter badAssaysFileWriter;
         badAssaysFileWriter = new BufferedWriter(new FileWriter(badAssaysFile, false));
         badAssaysFileWriter.write("## The following assays were marked by CreateExtendedIlluminaManifest as Unparseable (input file: " + INPUT.getAbsolutePath() + ")");
@@ -287,30 +273,13 @@ public class CreateExtendedIlluminaManifest extends CommandLineProgram {
         badAssaysFileWriter.write("#IlmnId,Name,GenomeBuild,Chr,MapInfo,FailureFlag");
         badAssaysFileWriter.newLine();
 
-        for (ExtendedIlluminaManifestRecord record : badRecords) {
+        for (Build37ExtendedIlluminaManifestRecord record : badRecords) {
             final List<String> badRecord = java.util.Arrays.asList(record.getIlmnId(), record.getName(), record.getGenomeBuild(), record.getChr(), "" + record.getPosition(), record.getFlag().toString());
             badAssaysFileWriter.write(StringUtils.join(badRecord, ","));
             badAssaysFileWriter.newLine();
         }
         badAssaysFileWriter.flush();
         badAssaysFileWriter.close();
-    }
-
-    /**
-     * Installs srcFile into destFile does not exist.
-     * @param srcFile The file to move from
-     * @param destFile The destination for the move
-     */
-    private void installFileIfNotFound(File srcFile, File destFile) throws IOException {
-        if (!destFile.exists()) {
-            log.info("Installing " + srcFile + " into " + destFile);
-            Files.move(srcFile, destFile);
-        } else {
-            // So we want the installation of this files to be atomic.
-            // We also must expect the condition that multiple instances of this program are running, each creating
-            // a temp file.  When the first of these completes it wins and installs.  The others have run for naught.
-            log.warn(String.format("Not installing file %s to %s. The file already exists.", srcFile.getAbsolutePath(), destFile.getAbsolutePath()));
-        }
     }
 
     private static class ManifestStatistics {
@@ -337,21 +306,21 @@ public class CreateExtendedIlluminaManifest extends CommandLineProgram {
         int numOnOtherBuild;
         int numLiftoverFailed;
 
-        void updateStatistics(ExtendedIlluminaManifestRecord rec) {
+        void updateStatistics(Build37ExtendedIlluminaManifestRecord rec) {
             numAssays++;
             if (rec.isSnp()) {
                 numSnps++;
             } else {
                 numIndels++;
             }
-            if (rec.getMajorGenomeBuild().equals(ExtendedIlluminaManifestRecord.BUILD_37)) {
+            if (rec.getMajorGenomeBuild().equals(Build37ExtendedIlluminaManifestRecord.BUILD_37)) {
                 numOnBuild37++;
-            } else if (rec.getMajorGenomeBuild().equals(ExtendedIlluminaManifestRecord.BUILD_36)) {
+            } else if (rec.getMajorGenomeBuild().equals(Build37ExtendedIlluminaManifestRecord.BUILD_36)) {
                 numOnBuild36++;
             } else {
                 numOnOtherBuild++;
             }
-            if (rec.getFlag().equals(ExtendedIlluminaManifestRecord.Flag.LIFTOVER_FAILED)) {
+            if (rec.getFlag().equals(Build37ExtendedIlluminaManifestRecord.Flag.LIFTOVER_FAILED)) {
                 numLiftoverFailed++;
             }
             if (!rec.isBad()) {
@@ -396,7 +365,7 @@ public class CreateExtendedIlluminaManifest extends CommandLineProgram {
                     }
                 }
                 else {
-                    if (rec.getFlag() == ExtendedIlluminaManifestRecord.Flag.PROBE_SEQUENCE_MISMATCH) {
+                    if (rec.getFlag() == Build37ExtendedIlluminaManifestRecord.Flag.PROBE_SEQUENCE_MISMATCH) {
                         numSnpProbeSequenceMismatch++;
                     }
                 }
@@ -520,20 +489,20 @@ public class CreateExtendedIlluminaManifest extends CommandLineProgram {
             }
             addHeaderLine(output, numColumns, rowValues);
         }
-        addHeaderLine(output, numColumns, ExtendedIlluminaManifest.EXTENDED_MANIFEST_VERSION_HEADER_NAME, VERSION);
-        addHeaderLine(output, numColumns, ExtendedIlluminaManifest.EXTENDED_MANIFEST_TARGET_BUILD_HEADER_NAME, TARGET_BUILD);
-        addHeaderLine(output, numColumns, ExtendedIlluminaManifest.EXTENDED_MANIFEST_TARGET_REFERENCE_HEADER_NAME, TARGET_REFERENCE_FILE.getAbsolutePath());
-        addHeaderLine(output, numColumns, ExtendedIlluminaManifest.EXTENDED_MANIFEST_CLUSTER_FILE_HEADER_NAME, CLUSTER_FILE.getAbsolutePath());
+        addHeaderLine(output, numColumns, Build37ExtendedIlluminaManifest.EXTENDED_MANIFEST_VERSION_HEADER_NAME, VERSION);
+        addHeaderLine(output, numColumns, Build37ExtendedIlluminaManifest.EXTENDED_MANIFEST_TARGET_BUILD_HEADER_NAME, TARGET_BUILD);
+        addHeaderLine(output, numColumns, Build37ExtendedIlluminaManifest.EXTENDED_MANIFEST_TARGET_REFERENCE_HEADER_NAME, TARGET_REFERENCE_FILE.getAbsolutePath());
+        addHeaderLine(output, numColumns, Build37ExtendedIlluminaManifest.EXTENDED_MANIFEST_CLUSTER_FILE_HEADER_NAME, CLUSTER_FILE.getAbsolutePath());
         if (DBSNP_FILE != null) {
-            addHeaderLine(output, numColumns, ExtendedIlluminaManifest.EXTENDED_MANIFEST_DBSNP_FILE_HEADER_NAME, DBSNP_FILE.getAbsolutePath());
+            addHeaderLine(output, numColumns, Build37ExtendedIlluminaManifest.EXTENDED_MANIFEST_DBSNP_FILE_HEADER_NAME, DBSNP_FILE.getAbsolutePath());
         }
 
         final String[] supportedBuildsFields = new String[SUPPORTED_BUILD.size() + 1];
         final String[] supportedReferenceFileFields = new String[SUPPORTED_BUILD.size() + 1];
         final String[] supportedChainFileFields = new String[SUPPORTED_BUILD.size() + 1];
-        supportedBuildsFields[0] = ExtendedIlluminaManifest.EXTENDED_MANIFEST_SUPPORTED_BUILD_HEADER_NAME;
-        supportedReferenceFileFields[0] = ExtendedIlluminaManifest.EXTENDED_MANIFEST_SUPPORTED_REFERENCE_HEADER_NAME;
-        supportedChainFileFields[0] = ExtendedIlluminaManifest.EXTENDED_MANIFEST_SUPPORTED_CHAIN_FILE_HEADER_NAME;
+        supportedBuildsFields[0] = Build37ExtendedIlluminaManifest.EXTENDED_MANIFEST_SUPPORTED_BUILD_HEADER_NAME;
+        supportedReferenceFileFields[0] = Build37ExtendedIlluminaManifest.EXTENDED_MANIFEST_SUPPORTED_REFERENCE_HEADER_NAME;
+        supportedChainFileFields[0] = Build37ExtendedIlluminaManifest.EXTENDED_MANIFEST_SUPPORTED_CHAIN_FILE_HEADER_NAME;
         for (int i = 0; i < SUPPORTED_BUILD.size(); i++) {
             supportedBuildsFields[i + 1] = SUPPORTED_BUILD.get(i);
             supportedReferenceFileFields[i + 1] = SUPPORTED_REFERENCE_FILE.get(i).getAbsolutePath();
@@ -547,7 +516,7 @@ public class CreateExtendedIlluminaManifest extends CommandLineProgram {
         addHeaderLine(output, numColumns, "[Assay]");
 
         // write the extended headers
-        final String[] extendedHeader = ArrayUtils.addAll(manifest.getManifestFileHeaderNames(), ExtendedIlluminaManifest.EXTENDED_MANIFEST_HEADERS);
+        final String[] extendedHeader = ArrayUtils.addAll(manifest.getManifestFileHeaderNames(), Build37ExtendedIlluminaManifest.EXTENDED_MANIFEST_HEADERS);
         output.write(StringUtils.join(extendedHeader, ","));
         output.newLine();
     }
