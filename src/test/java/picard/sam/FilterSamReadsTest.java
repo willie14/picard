@@ -57,16 +57,16 @@ public class FilterSamReadsTest extends CommandLineProgramTest {
     @DataProvider(name = "dataTestJsFilter")
     public Object[][] dataTestJsFilter() {
         return new Object[][]{
-                {"testdata/picard/sam/aligned.sam", "testdata/picard/sam/FilterSamReads/filterOddStarts.js",3},
-                {"testdata/picard/sam/aligned.sam", "testdata/picard/sam/FilterSamReads/filterReadsWithout5primeSoftClip.js", 0}
+                {"aligned.sam", "filterOddStarts.js", 3},
+                {"aligned.sam", "filterReadsWithout5primeSoftClip.js", 0}
         };
     }
 
     @DataProvider(name = "dataTestPairedIntervalFilter")
     public Object[][] dataTestPairedIntervalFilter() {
         return new Object[][]{
-                {"testdata/picard/sam/FilterSamReads/filter1.interval_list", 4},
-                {"testdata/picard/sam/FilterSamReads/filter2.interval_list", 0}
+                {"filter1.interval_list", 4},
+                {"filter2.interval_list", 0}
         };
     }
 
@@ -75,16 +75,16 @@ public class FilterSamReadsTest extends CommandLineProgramTest {
      */
     @Test(dataProvider = "dataTestJsFilter")
     public void testJavaScriptFilters(final String samFilename, final String javascriptFilename,final int expectNumber) throws Exception {
-        launchJavaScriptFilter(samFilename, javascriptFilename, expectNumber);
+        launchJavaScriptFilter(TEST_DIR + "/" + samFilename, TEST_DIR + "/" + javascriptFilename, expectNumber);
     }
 
     @Test
     public void testJavaScriptFiltersWithCRAM() throws Exception {
         final FilterSamReads program = setupProgram(
-                new File("testdata/picard/sam/FilterSamReads/filterOddStarts.js"),
-                new File(CramCompatibilityTest.CRAM_FILE),
+                new File(TEST_DIR,"filterOddStarts.js"),
+                new File(CramData.CRAM_FILE),
                 FilterSamReads.Filter.includeJavascript,
-                CramCompatibilityTest.REFERENCE_FILE);
+                CramData.REFERENCE_FILE);
         Assert.assertEquals(program.doWork(), 0);
         CramCompatibilityTest.assertCRAM(program.OUTPUT);
     }

@@ -81,11 +81,7 @@ public class SortSam extends CommandLineProgram {
     public SAMFileHeader.SortOrder SORT_ORDER;
 
     private final Log log = Log.getInstance(SortSam.class);
-
-    public static void main(final String[] argv) {
-        new SortSam().instanceMainWithExit(argv);
-    }
-
+    
     protected int doWork() {
         IOUtil.assertFileIsReadable(INPUT);
         IOUtil.assertFileIsWritable(OUTPUT);
@@ -109,3 +105,4 @@ public class SortSam extends CommandLineProgram {
         return 0;
     }
 }
+
