@@ -40,37 +40,37 @@ public class IlluminaManifestRecord {
     private final String[] originalLine;        // A copy of the line from the original file
     private final int index;
 
-    private final String ilmnId;
-    private final String name;
-    private IlluminaStrand ilmnStrand;
+    private final String ilmnId;        // V
+    private final String name;          // V
+    private final IlluminaStrand ilmnStrand;  // V
 
-    private final String snp;
+    private final String snp;           // V
     private final boolean isIndel;              // Not part of the file...
     private final boolean isAmbiguous;          // Not part of the file
 
-    private final String addressAId;
-    private final String alleleAProbeSeq;
-    private final String addressBId;
-    private final String alleleBProbeSeq;
+    private final String addressAId;    // V
+    private final String alleleAProbeSeq;   // V
+    private final String addressBId;        // V
+    private final String alleleBProbeSeq;   // V
 
-    private final String genomeBuild;
+    private final String genomeBuild;       // V
     private final String majorGenomeBuild;      // Not part of the file... (35, 36, 37)
     private String hgGenomeBuild;               // Not part of the file... (HG17, HG18, HG19)
 
-    private final String chr;
-    private final int position;                       // annotated as 'MapInfo'
+    private final String chr;               // V
+    private final int position;             // V          // annotated as 'MapInfo'
 
-    private final String ploidy;
-    private final String species;
-    private final String source;
-    private final String sourceVersion;
-    private IlluminaStrand sourceStrand;
-    private final String sourceSeq;
-    private final String topGenomicSeq;
-    private final int beadSetId;
-    private final String expClusters;
-    private Strand refStrand;
-    private final boolean intensityOnly;
+    private final String ploidy;            // V
+    private final String species;           // V
+    private final String source;            // V
+    private final String sourceVersion;     // V
+    private final IlluminaStrand sourceStrand;    // V
+    private final String sourceSeq;         // V
+    private final String topGenomicSeq;     // V
+    private final int beadSetId;                        //Not in the bpm.
+    private final String expClusters;       // V
+    private final Strand refStrand;               // V
+    private final boolean intensityOnly;    // V
 
     private static final Set<String> indels = Stream.of("[D/I]", "[I/D]").collect(Collectors.toSet());
     private static final Set<String> ambiguousSnps = Stream.of("[A/T]", "[T/A]", "[G/C]", "[C/G]").collect(Collectors.toSet());

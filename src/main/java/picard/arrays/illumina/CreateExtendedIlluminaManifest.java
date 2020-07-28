@@ -227,7 +227,7 @@ public class CreateExtendedIlluminaManifest extends CommandLineProgram {
             final IlluminaManifest secondPassManifestFile = new IlluminaManifest(INPUT);
             final Iterator<IlluminaManifestRecord> secondPassIterator = secondPassManifestFile.iterator();
 
-            final BufferedWriter out = new BufferedWriter(new FileWriter(OUTPUT, true));
+            final BufferedWriter out = new BufferedWriter(new FileWriter(OUTPUT, false));
             writeExtendedIlluminaManifestHeaders(manifestFile, out);
 
             //second iteration to write all records after dupe evaluation

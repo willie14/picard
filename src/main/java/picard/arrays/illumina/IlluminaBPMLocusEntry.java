@@ -1,82 +1,88 @@
 package picard.arrays.illumina;
 
+import htsjdk.tribble.annotation.Strand;
+
 /**
  * A simple class to represent a locus entry in an Illumina Bead Pool Manifest (BPM) file
  */
 public class IlluminaBPMLocusEntry {
+    int version;        // The LocusEntry version.
+
     // IlmnID (probe identifier) of locus
-    String ilmnId;
+    String ilmnId;      // Verified.
 
     // Name (variant identifier) of locus
-    String name;
+    String name;        // Verified
 
     // Index of this entry.
     int index;
 
     // Illumina Strand value
-    String ilmnStrand;
+    IlluminaManifestRecord.IlluminaStrand ilmnStrand;       // Verified
 
     // SNP value for locus (e.g., [A/C])
-    String snp;
+    String snp;     // Verified
 
     // Chromosome for the locus (e.g., XY)
-    String chrom;
+    String chrom;   // V
 
-    String ploidy;
+    String ploidy;  // V
 
-    String species;
+    String species; // V
 
     // Mapping location of locus
-    int mapInfo;
+    int mapInfo;    // V
 
     // Customer Strand
-    String customerStrand;
+    String customerStrand;      // ?? Not verified - NOT in csv?
 
     // AddressA ID of locus
-    int addressA;
+    int addressA;       // V
 
     // Only populated in CSV files or BPM files with version 4 data block
-    String alleleAProbeSeq;
+    String alleleAProbeSeq;     // V
 
     // AddressB ID of locus (0 if none)
-    int addressB;
+    int addressB;       // V
 
     // Only populated in CSV files or BPM files with version 4 data block (empty if none)
-    String alleleBProbeSeq;
+    String alleleBProbeSeq;     // V
 
-    String genomeBuild;
-    String source;
-    String sourceVersion;
-    String sourceStrand;
-
-    // Only populated in CSV files or BPM files with version 4 data block
-    String sourceSeq;
+    String genomeBuild;         // V
+    String source;              // V
+    String sourceVersion;       // V
+    IlluminaManifestRecord.IlluminaStrand sourceStrand;     // V
 
     // Only populated in CSV files or BPM files with version 4 data block
-    String topGenomicSeq;
+    String sourceSeq;           // V
 
-    int expClusters;
-    int intensityOnly;
+    // Only populated in CSV files or BPM files with version 4 data block
+    String topGenomicSeq;       // V
+
+    int expClusters;            // V
+    boolean intensityOnly;          // V
 
    // Identifies type of assay (0 - Infinium II , 1 - Infinium I (A/T), 2 - Infinium I (G/C)
-    int assayType;
+    int assayType;              // Not Verified - NOT in csv
 
-    float fracA;
-    float fracC;
-    float fracT;
-    float fracG;
+    float fracA;              // Not Verified - NOT in csv
+    float fracC;              // Not Verified - NOT in csv
+    float fracT;              // Not Verified - NOT in csv
+    float fracG;              // Not Verified - NOT in csv
 
     // Refstrand annotation
-    String refStrand;
+    Strand refStrand;           // V
 
     // Not part of the locusEntry record in the BPM, added here for convenience
-    int normalizationId;
+    int normalizationId;        // Not Verified - added here.
 
     public IlluminaBPMLocusEntry() {
+        version = -1;
+
         ilmnId = "";
         name = "";
         index = -1;
-        ilmnStrand = "";
+        ilmnStrand = IlluminaManifestRecord.IlluminaStrand.NONE;
         snp = "";
         chrom = "";
         ploidy = "";
@@ -90,12 +96,10 @@ public class IlluminaBPMLocusEntry {
         genomeBuild = "";
         source = "";
         sourceVersion = "";
-        sourceStrand = "";
-
-        sourceStrand = "";
+        sourceStrand = IlluminaManifestRecord.IlluminaStrand.NONE;
 
         expClusters = -1;
-        intensityOnly = -1;
+        intensityOnly = false;
         assayType = -1;
 
         fracA = 0.0f;
@@ -103,7 +107,7 @@ public class IlluminaBPMLocusEntry {
         fracT = 0.0f;
         fracG = 0.0f;
 
-        refStrand = "";
+        refStrand = Strand.NONE;
 
         normalizationId = -1;
     }
