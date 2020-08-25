@@ -139,7 +139,7 @@ public class CreateExtendedIlluminaManifest extends CommandLineProgram {
                 throw new PicardException("Error reading cluster file '" + CLUSTER_FILE.getAbsolutePath() + "'", e);
             }
 
-            Build37ExtendedIlluminaManifestRecordCreator creator = new Build37ExtendedIlluminaManifestRecordCreator(referenceSequenceMap, chainFilesMap);
+            ExtendedIlluminaManifestRecordCreator creator = new ExtendedIlluminaManifestRecordCreator(referenceSequenceMap, chainFilesMap);
 
             // first iteration through the manifest to find all dupes
             log.info("Phase 1.  First Pass through the manifest.  Build coordinate map for dupe flagging and make SNP and indel-specific interval lists for parsing dbSnp");
@@ -160,7 +160,7 @@ public class CreateExtendedIlluminaManifest extends CommandLineProgram {
                 IlluminaBPMLocusEntry locusEntry = illuminaBPMLocusEntries[locusIndex++];
                 final IlluminaManifestRecord record = firstPassIterator.next();
 
-                creator.validateLocusEntryAndCreateExtendedRecord(locusEntry, record);
+                creator.validateLocusEntryAndCreateExtendedRecord(locusEntry, record, false);
 
                 // Create an ExtendedIlluminaManifestRecord here so that we can get the (potentially lifted over) coordinates
                 final Build37ExtendedIlluminaManifestRecord rec = new Build37ExtendedIlluminaManifestRecord(record,
